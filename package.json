@@ -1,0 +1,24 @@
+{
+  "name": "fluffy-telegram",
+  "version": "1.0.0",
+  "description": "Bot ",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HommerCLOD/fluffy-telegram.git"
+  },
+  "keywords": [],
+  "author": "HommerCLOD",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/HommerCLOD/fluffy-telegram/issues"
+  },
+  "homepage": "https://github.com/HommerCLOD/fluffy-telegram#readme",
+  "dependencies": {
+    "axios": "^1.2.1",
+    "puppeteer": "^19.4.0"
+  }
+}
