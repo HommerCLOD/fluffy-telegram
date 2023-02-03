@@ -80,7 +80,7 @@ function createDir(tittle) {
 }
 
 async function save_tittle_name(tittle) {
-    return tittle.replaceAll("/", " ");
+    return tittle.replaceAll("/", " ").replaceAll("?", "");
 }
 
 launch();
