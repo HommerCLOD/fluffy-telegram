@@ -1,10 +1,15 @@
-const puppeteer = require("puppeteer");
-const fs = require("fs");
-const axios = require("axios");
+const axios = require("axios")
+const cheerio = require('cheerio')
+const fs = require("fs")
+const fsAsync = require('fs').promises;
 
-const Links = require("./links.json");
+const Links = require("./links.json")
 
-async function launch() {
+const telegraph_api = "https://telegra.ph"
+const file_extension = ".png"
+const path_to_downloads_dir = "downloads/"
+
+async function download_images_from_telegraph(urls) {
     console.log(`
 ███████╗██╗░░░░░██╗░░░██╗███████╗███████╗██╗░░░██╗
 ██╔════╝██║░░░░░██║░░░██║██╔════╝██╔════╝╚██╗░██╔╝
@@ -12,75 +17,114 @@ async function launch() {
 ██╔══╝░░██║░░░░░██║░░░██║██╔══╝░░██╔══╝░░░░╚██╔╝░░
 ██║░░░░░███████╗╚██████╔╝██║░░░░░██║░░░░░░░░██║░░░
 ╚═╝░░░░░╚══════╝░╚═════╝░╚═╝░░░░░╚═╝░░░░░░░░╚═╝░░░`);
+    for (let url of urls) {
+        try {
+            const html = await get_html(url)
+            // console.log(html)
+            const { image_src_list, tittle } = extract_image_src(html)
+            const clean_tittle = clean_text(tittle, { " ": " " })
 
-    console.log(new Date(), "| Start and open a browser");
-
-    const browser = await puppeteer.launch({ headless: true });
-    const page = await browser.newPage();
-
-    console.log(new Date(), "| Start handling links");
-    for (let address of Links) {
-        console.log(new Date(), "| Go to page " + address);
-        await page.goto(address, { waitUntil: "load" });
-        console.log(new Date(), "| Wait until load");
-        await page.waitForTimeout(2000);
-
-        console.log(new Date(), "| Get required data");
-        const page_Tag = await page.$("h1");
-        const tittle = await (
-            await page_Tag.getProperty("textContent")
-        ).jsonValue();
-        const images = await page.evaluate(() =>
-            Array.from(document.querySelectorAll("img"), (element) => element.src)
-        );
-
-        console.log(new Date(), "| Create new folder: " + tittle);
-        createDir(await save_tittle_name(tittle));
-        for (let i = 1; i <= images.length; i++) {
-            try {
-                const config = {
-                    method: "get",
-                    responseType: "arraybuffer",
-                    url: images[i - 1],
-                    headers: {},
-                };
-
-                const response = await axios(config);
-                const buffer = Buffer.from(response.data, "utf8");
-
-                fs.writeFileSync(
-                    `downloads/${await save_tittle_name(tittle)}/${i}.png`,
-                    buffer,
-                    "base64"
-                );
-
-                console.log(
-                    new Date(),
-                    "| Loaded image: " + i + "/" + images.length,
-                    `Path: /downloads/${tittle}/${i}.png`
-                );
-            } catch (error) {
-                console.log(new Date(), "| Error ", error);
-            }
+            await create_directory_if_not_exists(clean_tittle)
+            await get_images(image_src_list, clean_tittle)
+        } catch (error) {
+            console.log(error)
         }
-        console.log(new Date(), "| Completed: " + address);
     }
-    console.log(new Date(), "| Closing. Have a nice day =)");
-    await page.waitForTimeout(2000);
-    browser.close();
 }
 
-function createDir(tittle) {
+async function get_html(url) {
     try {
-        fs.mkdirSync(`downloads/${tittle}`);
-        return;
-    } catch (err) {
-        console.log(err);
+        const response = await axios.get(url);
+        return response.data;
+    } catch (error) {
+        throw new Error(`Помилка при отриманні HTML: ${error.message}`);
     }
 }
 
-async function save_tittle_name(tittle) {
-    return tittle.replaceAll("/", " ").replaceAll("?", "");
+function extract_image_src(html) {
+    try {
+        const $ = cheerio.load(html);
+        const image_src_list = [];
+        const tittle = $('h1').first().text();
+
+        $('img').each((index, element) => {
+            const src = $(element).attr('src');
+            if (src) {
+                image_src_list.push(src);
+            }
+        });
+
+        return {
+            image_src_list,
+            tittle
+        };
+    } catch (error) {
+        console.log(error)
+    }
 }
 
-launch();
+async function get_images(image_urls, file_name) {
+    for (let i = 1; i <= image_urls.length; i++) {
+        try {
+            let url = telegraph_api + image_urls[i - 1]
+
+            if (image_urls[i - 1].includes("https://")) {
+                url = image_urls[i - 1]
+            }
+
+            download_single_image(url, file_name, i + file_extension)
+        } catch (error) {
+            console.log(error)
+        }
+    }
+}
+
+async function download_single_image(image_url, dir_name, index) {
+    try {
+        const response = await axios({
+            method: 'get',
+            url: image_url,
+            responseType: 'stream',
+        });
+
+        return new Promise((resolve, reject) => {
+            const writeStream = fs.createWriteStream(path_to_downloads_dir + dir_name + "/" + index);
+            response.data.pipe(writeStream);
+            writeStream.on('finish', () => {
+                console.log(`Dowloaded ${dir_name}/${index}`);
+                resolve();
+            });
+
+            writeStream.on('error', (err) => {
+                console.log(err)
+                reject(err);
+            });
+        });
+    } catch (error) {
+        console.log(error.message)
+    }
+}
+
+function clean_text(input_text, replacements = {}) {
+    const allowed_characters_regex = /[^a-zA-Zа-яА-Я0-9\-_]/g;
+    const cleaned_text = input_text.replace(allowed_characters_regex, (match) => {
+        return replacements[match] || '';
+    });
+
+    return cleaned_text;
+}
+
+async function create_directory_if_not_exists(directory_path) {
+    try {
+        await fsAsync.mkdir(path_to_downloads_dir + directory_path);
+        console.log(`Створено папку '/${directory_path}'`);
+    } catch (err) {
+        if (err.code === 'EEXIST') {
+            console.log(`Папка '${directory_path}' вже існує.`);
+        } else {
+            console.error('Помилка при створенні папки:', err);
+        }
+    }
+}
+
+download_images_from_telegraph(Links)

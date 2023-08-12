@@ -19,6 +19,6 @@
   "homepage": "https://github.com/HommerCLOD/fluffy-telegram#readme",
   "dependencies": {
     "axios": "^1.2.1",
-    "puppeteer": "^19.4.0"
+    "cheerio": "^1.0.0-rc.12"
   }
 }
